@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Water Dispenser Dashboard</title>
+<style>
+:root{--bg:#f4f6f9;--card:#fff;--tx:#14202e;--mu:#64748b;--bd:#e2e8f0;--cold:#0ea5e9;--hot:#ef4444;--ok:#16a34a;--off:#94a3b8;--warn:#f59e0b;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0d1520;--card:#162131;--tx:#e6edf5;--mu:#8ba0b8;--bd:#25354a;--cold:#38bdf8;--hot:#f87171;--ok:#4ade80;--off:#51627a}}
+:root[data-theme="dark"]{--bg:#0d1520;--card:#162131;--tx:#e6edf5;--mu:#8ba0b8;--bd:#25354a;--cold:#38bdf8;--hot:#f87171;--ok:#4ade80;--off:#51627a}
+*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.w{max-width:1400px;margin:0 auto;padding:16px}
+h1{font-size:20px;margin:0}.sub{color:var(--mu);font-size:13px}
+header{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:4px 10px;border-radius:99px;border:1px solid var(--bd);background:var(--card)}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--off)}.on .dot{background:var(--ok);box-shadow:0 0 6px var(--ok)}
+
+/* Layout Grid Utama: Menyesuaikan agar Telemetry Log bisa di kanan */
+.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+@media(min-width: 1024px) {
+  .grid { grid-template-columns: repeat(2, 1fr); }
+  .full-right { grid-row: span 3; }
+}
+
+.c{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:16px;display:flex;flex-direction:column;justify-content:space-between}
+.card-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:8px}
+.card-head h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--mu);margin:0}
+.status-group{display:flex;align-items:center;gap:6px}
+.big{font-size:40px;font-weight:700;line-height:1}.big small{font-size:16px;font-weight:500;color:var(--mu)}
+.cold .big{color:var(--cold)}.hot .big{color:var(--hot)}
+.row{display:flex;justify-content:space-between;align-items:center;margin-top:10px;gap:8px}
+.sp{display:flex;align-items:center;gap:8px}
+button{font:inherit;border:1px solid var(--bd);background:var(--bg);color:var(--tx);border-radius:8px;padding:5px 10px;cursor:pointer;transition:background .2s}
+button:hover{border-color:var(--mu)}
+button:active{transform:scale(.97)}
+button.btn-active{background:var(--ok);color:#fff;border-color:var(--ok);font-weight:600}
+.bar{height:6px;border-radius:99px;background:var(--bd);overflow:hidden;margin-top:10px}.bar i{display:block;height:100%;transition:width .5s}
+.badge{font-weight:700;font-size:11px;padding:3px 8px;border-radius:99px;background:var(--off);color:#fff;letter-spacing:.03em}
+.badge.on{background:var(--ok)}
+.badge.cold-on{background:var(--cold);color:#09111a}
+.badge.hot-on{background:var(--hot);color:#fff}
+.badge.warn{background:var(--warn);color:#09111a}
+.tank{display:flex;gap:14px;align-items:center}
+.tube{width:48px;height:110px;border:2px solid var(--bd);border-radius:8px;position:relative;overflow:hidden;flex:none;background:var(--bg)}
+.tube i{position:absolute;left:0;right:0;bottom:0;background:var(--cold);opacity:.85;transition:height .5s,background .3s}
+.sensor-list{display:flex;flex-direction:column;gap:5px;flex:1}
+.sensor-item{display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:4px 8px;border-radius:6px;background:var(--bg);border:1px solid var(--bd)}
+
+/* Grafik Diperkecil Ukurannya */
+svg{width:100%;height:75px;display:block}
+
+.tw{max-height:550px;overflow:auto;overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap}
+th,td{padding:5px 8px;text-align:right;border-bottom:1px solid var(--bd)}
+th{position:sticky;top:0;background:var(--card);color:var(--mu);font-weight:600}
+th:first-child,td:first-child,td:nth-child(2),th:nth-child(2){text-align:left}
+.y{color:var(--ok);font-weight:600}.n{color:var(--off)}
+</style>
+</head>
+<body>
+<div class="w">
+  <header>
+    <div>
+      <h1>Water Dispenser Dashboard</h1>
+      <div class="sub">MQTT Live Telemetry · Topic: /iotdispenser_output</div>
+    </div>
+    <span class="pill" id="conn"><span class="dot"></span><span id="conn-txt">Connecting...</span> <span id="clk" class="sub"></span></span>
+  </header>
+
+  <div class="grid">
+    <!-- KOLOM KIRI: KONTROL & SENSOR -->
+    <div style="display:flex; flex-direction:column; gap:14px;">
+      
+      <!-- KOTAK SUHU DINGIN -->
+      <div class="c cold">
+        <div>
+          <div class="card-head">
+            <h2>Cold Water</h2>
+            <div class="status-group">
+              <span class="badge" id="sw-cool-badge">SW: OFF</span>
+              <span class="badge" id="cool-status">COOLING OFF</span>
+            </div>
+          </div>
+          <div class="big"><span id="ct">--</span><small> °C</small></div>
+          <div class="sub">Measured Temperature</div>
+          <div class="bar"><i id="cb" style="background:var(--cold);width:0%"></i></div>
+        </div>
+        <div>
+          <div class="row">
+            <span>Setpoint</span>
+            <span class="sp">
+              <button onclick="adj('cs', -1)">−</button>
+              <b id="cs">5</b> °C
+              <button onclick="adj('cs', 1)">+</button>
+            </span>
+          </div>
+          <div class="row">
+            <span>Manual Override</span>
+            <button id="btn-cool" onclick="toggleRelay('cool')">Force Cooling: OFF</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- KOTAK SUHU PANAS -->
+      <div class="c hot">
+        <div>
+          <div class="card-head">
+            <h2>Hot Water</h2>
+            <div class="status-group">
+              <span class="badge" id="sw-heat-badge">SW: OFF</span>
+              <span class="badge" id="heat-status">HEATING OFF</span>
+            </div>
+          </div>
+          <div class="big"><span id="ht">--</span><small> °C</small></div>
+          <div class="sub">Measured Temperature</div>
+          <div class="bar"><i id="hb" style="background:var(--hot);width:0%"></i></div>
+        </div>
+        <div>
+          <div class="row">
+            <span>Setpoint</span>
+            <span class="sp">
+              <button onclick="adj('hs', -1)">−</button>
+              <b id="hs">80</b> °C
+              <button onclick="adj('hs', 1)">+</button>
+            </span>
+          </div>
+          <div class="row">
+            <span>Manual Override</span>
+            <button id="btn-heat" onclick="toggleRelay('heat')">Force Heating: OFF</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- KOTAK TANGKI & POMPA -->
+      <div class="c">
+        <div>
+          <div class="card-head">
+            <h2>Tank & Water Pump</h2>
+            <div class="status-group">
+              <span class="badge" id="pump-status">PUMP OFF</span>
+            </div>
+          </div>
+          <div class="tank">
+            <div class="tube"><i id="tl" style="height:20%"></i></div>
+            <div class="sensor-list">
+              <div class="sensor-item">
+                <span>Galon (Door SW)</span>
+                <span class="badge" id="galon-badge">KOSONG</span>
+              </div>
+              <div class="sensor-item">
+                <span>Float Switch</span>
+                <span class="badge" id="float-badge">BELUM PENUH</span>
+              </div>
+              <div class="sensor-item">
+                <span>Auto Pump</span>
+                <span class="badge" id="autopump-badge">IDLE</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="row">
+            <span class="sub">Max auto-fill: 60s</span>
+            <button id="btn-pump" onclick="toggleRelay('pump')">Manual Pump: OFF</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- GRAFIK TREN SUHU (DIKECILKAN) -->
+      <div class="c" style="padding:12px;">
+        <div class="card-head" style="margin-bottom:6px;">
+          <h2>Trend — <span style="color:var(--cold)">Cold</span> / <span style="color:var(--hot)">Hot</span></h2>
+        </div>
+        <svg id="sv" viewBox="0 0 600 120" preserveAspectRatio="none"></svg>
+      </div>
+
+    </div>
+
+    <!-- KOLOM KANAN: TELEMETRY LOG (FULL KE ATAS) -->
+    <div class="c full-right" style="height: 100%;">
+      <div class="card-head">
+        <h2>Telemetry Log</h2>
+        <span class="sub">Live Feed</span>
+      </div>
+      <div class="tw">
+        <table>
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Event</th>
+              <th>C.Set</th>
+              <th>C.°C</th>
+              <th>H.Set</th>
+              <th>H.°C</th>
+              <th>Cool</th>
+              <th>Heat</th>
+              <th>Pump</th>
+              <th>Float</th>
+            </tr>
+          </thead>
+          <tbody id="lg"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let state = {
+  suhuDingin: 0, suhuPanas: 0,
+  setpoint_cool: 5, setpoint_heat: 80,
+  autocool: 0, ctrlCompCold: 0,
+  autohot: 0, ctrlCompHot: 0,
+  autopump: 0, ctrlPump: 0,
+  sw_cool_state: 0, sw_heat_state: 0,
+  sw_door_state: 0, float_sw_state: 0
+};
+let prevActive = { cool: false, heat: false, pump: false };
+let hist = [];
+let logs = [];
+
+const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+const ws = new WebSocket(`${proto}//${location.host}/ws`);
+
+ws.onopen = () => {
+  $('conn').classList.add('on');
+  $('conn-txt').textContent = 'WS Connected';
+};
+
+ws.onclose = () => {
+  $('conn').classList.remove('on');
+  $('conn-txt').textContent = 'Disconnected';
+};
+
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  Object.assign(state, data);
+  updateUI();
+};
+
+function sendCommand(cmd) {
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ command: cmd }));
+  }
+}
+
+function adj(type, delta) {
+  if (type === 'cs') {
+    const next = Math.max(2, Math.min(20, Math.round(state.setpoint_cool) + delta));
+    state.setpoint_cool = next;
+    $('cs').textContent = next;
+    sendCommand(`cold_set:${next}`);
+    addLog(`Cold setpoint -> ${next}°C`);
+  } else {
+    const next = Math.max(50, Math.min(98, Math.round(state.setpoint_heat) + delta));
+    state.setpoint_heat = next;
+    $('hs').textContent = next;
+    sendCommand(`heat_set:${next}`);
+    addLog(`Hot setpoint -> ${next}°C`);
+  }
+}
+
+function toggleRelay(target) {
+  if (target === 'cool') {
+    const next = !(state.ctrlCompCold >= 1);
+    sendCommand(next ? 'dingin_on' : 'dingin_off');
+    addLog(`Manual Cooling ${next ? 'ON' : 'OFF'}`);
+  } else if (target === 'heat') {
+    const next = !(state.ctrlCompHot >= 1);
+    sendCommand(next ? 'panas_on' : 'panas_off');
+    addLog(`Manual Heating ${next ? 'ON' : 'OFF'}`);
+  } else if (target === 'pump') {
+    const next = !(state.ctrlPump >= 1);
+    sendCommand(next ? 'pump_on' : 'pump_off');
+    addLog(`Manual Pump ${next ? 'ON' : 'OFF'}`);
+  }
+}
+
+function ts() {
+  const d = new Date();
+  return [d.getHours(), d.getMinutes(), d.getSeconds()]
+    .map(n => String(n).padStart(2, '0')).join(':');
+}
+
+function addLog(ev) {
+  const coolOn = (state.autocool >= 1 || state.ctrlCompCold >= 1);
+  const heatOn = (state.autohot >= 1 || state.ctrlCompHot >= 1);
+  const pumpOn = (state.autopump >= 1 || state.ctrlPump >= 1);
+  const floatFull = (state.float_sw_state >= 1);
+
+  logs.unshift({
+    t: ts(), ev,
+    cs: state.setpoint_cool, ct: Number(state.suhuDingin),
+    hs: state.setpoint_heat, ht: Number(state.suhuPanas),
+    cool: coolOn, heat: heatOn, pump: pumpOn, float: floatFull
+  });
+  if (logs.length > 200) logs.pop();
+  renderLog();
+}
+
+function renderLog() {
+  $('lg').innerHTML = logs.slice(0, 80).map(r => {
+    const f = v => `<td class="${v ? 'y' : 'n'}">${v ? 'ON' : 'OFF'}</td>`;
+    return `<tr>
+      <td>${r.t}</td>
+      <td>${r.ev}</td>
+      <td>${r.cs}</td>
+      <td>${r.ct.toFixed(1)}</td>
+      <td>${r.hs}</td>
+      <td>${r.ht.toFixed(1)}</td>
+      ${f(r.cool)}${f(r.heat)}${f(r.pump)}
+      <td class="${r.float ? 'y' : 'n'}">${r.float ? 'FULL' : 'LOW'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function updateUI() {
+  if (state.mqtt_connected) {
+    $('conn').classList.add('on');
+    $('conn-txt').textContent = 'MQTT Online';
+  } else {
+    $('conn').classList.remove('on');
+    $('conn-txt').textContent = 'MQTT Offline';
+  }
+  $('clk').textContent = state.last_update ? `(${state.last_update})` : ts();
+
+  const ct = Number(state.suhuDingin) || 0;
+  const ht = Number(state.suhuPanas) || 0;
+  $('ct').textContent = ct.toFixed(1);
+  $('ht').textContent = ht.toFixed(1);
+  $('cs').textContent = Math.round(state.setpoint_cool);
+  $('hs').textContent = Math.round(state.setpoint_heat);
+
+  $('cb').style.width = `${Math.min(100, Math.max(0, (ct / 35) * 100))}%`;
+  $('hb').style.width = `${Math.min(100, Math.max(0, (ht / 100) * 100))}%`;
+
+  const coolOn = (state.autocool >= 1 || state.ctrlCompCold >= 1);
+  const heatOn = (state.autohot >= 1 || state.ctrlCompHot >= 1);
+  const pumpOn = (state.autopump >= 1 || state.ctrlPump >= 1);
+
+  const coolBadge = $('cool-status');
+  coolBadge.textContent = coolOn ? 'COOLING ON' : 'COOLING OFF';
+  coolBadge.className = 'badge' + (coolOn ? ' cold-on' : '');
+
+  const swCoolBadge = $('sw-cool-badge');
+  swCoolBadge.textContent = state.sw_cool_state >= 1 ? 'SW: ON' : 'SW: OFF';
+  swCoolBadge.className = 'badge' + (state.sw_cool_state >= 1 ? ' on' : '');
+
+  const heatBadge = $('heat-status');
+  heatBadge.textContent = heatOn ? 'HEATING ON' : 'HEATING OFF';
+  heatBadge.className = 'badge' + (heatOn ? ' hot-on' : '');
+
+  const swHeatBadge = $('sw-heat-badge');
+  swHeatBadge.textContent = state.sw_heat_state >= 1 ? 'SW: ON' : 'SW: OFF';
+  swHeatBadge.className = 'badge' + (state.sw_heat_state >= 1 ? ' on' : '');
+
+  const pumpBadge = $('pump-status');
+  pumpBadge.textContent = pumpOn ? 'PUMP ON' : 'PUMP OFF';
+  pumpBadge.className = 'badge' + (pumpOn ? ' on' : '');
+
+  const btnCool = $('btn-cool');
+  const manCool = state.ctrlCompCold >= 1;
+  btnCool.textContent = `Force Cooling: ${manCool ? 'ON' : 'OFF'}`;
+  btnCool.className = manCool ? 'btn-active' : '';
+
+  const btnHeat = $('btn-heat');
+  const manHeat = state.ctrlCompHot >= 1;
+  btnHeat.textContent = `Force Heating: ${manHeat ? 'ON' : 'OFF'}`;
+  btnHeat.className = manHeat ? 'btn-active' : '';
+
+  const btnPump = $('btn-pump');
+  const manPump = state.ctrlPump >= 1;
+  btnPump.textContent = `Manual Pump: ${manPump ? 'ON' : 'OFF'}`;
+  btnPump.className = manPump ? 'btn-active' : '';
+
+  const hasGalon = state.sw_door_state >= 1;
+  const galonBadge = $('galon-badge');
+  galonBadge.textContent = hasGalon ? 'ADA' : 'LEPAS';
+  galonBadge.className = 'badge' + (hasGalon ? ' on' : ' warn');
+
+  const isFull = state.float_sw_state >= 1;
+  const floatBadge = $('float-badge');
+  floatBadge.textContent = isFull ? 'PENUH' : 'BELUM PENUH';
+  floatBadge.className = 'badge' + (isFull ? ' on' : ' warn');
+
+  const autoPumpBadge = $('autopump-badge');
+  autoPumpBadge.textContent = state.autopump >= 1 ? 'AKTIF' : 'STANDBY';
+  autoPumpBadge.className = 'badge' + (state.autopump >= 1 ? ' on' : '');
+
+  const tubeFill = $('tl');
+  tubeFill.style.height = isFull ? '90%' : '25%';
+  tubeFill.style.background = isFull ? 'var(--cold)' : 'var(--warn)';
+
+  let changes = [];
+  if (prevActive.cool !== coolOn) changes.push(`Cooling ${coolOn ? 'ON' : 'OFF'}`);
+  if (prevActive.heat !== heatOn) changes.push(`Heating ${heatOn ? 'ON' : 'OFF'}`);
+  if (prevActive.pump !== pumpOn) changes.push(`Pump ${pumpOn ? 'ON' : 'OFF'}`);
+  prevActive = { cool: coolOn, heat: heatOn, pump: pumpOn };
+
+  addLog(changes.length ? changes.join(', ') : 'Telemetry update');
+
+  hist.push([ct, ht]);
+  if (hist.length > 60) hist.shift();
+  const points = (idx, lo, hi) => hist.map((h, i) => {
+    const x = hist.length > 1 ? (i / (hist.length - 1)) * 600 : 300;
+    const y = 112 - ((h[idx] - lo) / (hi - lo)) * 104;
+    return `${x.toFixed(1)},${Math.max(4, Math.min(116, y)).toFixed(1)}`;
+  }).join(' ');
+
+  $('sv').innerHTML = `
+    <polyline fill="none" stroke="var(--cold)" stroke-width="2" points="${points(0, 0, 35)}"/>
+    <polyline fill="none" stroke="var(--hot)" stroke-width="2" points="${points(1, 20, 100)}"/>
+  `;
+}
+</script>
+</body>
+</html>
