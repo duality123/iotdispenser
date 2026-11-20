@@ -2,3 +2,4 @@ fastapi
 uvicorn[standard]
 paho-mqtt
 Jinja2==3.0.3
+lark_oapi
